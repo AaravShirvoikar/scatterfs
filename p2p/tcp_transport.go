@@ -11,7 +11,7 @@ import (
 type TCPPeer struct {
 	net.Conn
 	incoming bool
-	Wg       sync.WaitGroup
+	wg       sync.WaitGroup
 }
 
 func NewTCPPeer(conn net.Conn, incoming bool) *TCPPeer {
@@ -24,6 +24,10 @@ func NewTCPPeer(conn net.Conn, incoming bool) *TCPPeer {
 func (p *TCPPeer) Send(b []byte) error {
 	_, err := p.Conn.Write(b)
 	return err
+}
+
+func (p *TCPPeer) CloseStream() {
+	p.wg.Done()
 }
 
 type OnPeerFunc func(Peer) error
@@ -45,6 +49,10 @@ func NewTCPTransport(addr string, handshake HandshakeFunc, decode DecodeFunc, on
 		OnPeer:     onPeer,
 		msgChan:    make(chan Message),
 	}
+}
+
+func (t *TCPTransport) Addr() string {
+	return t.listenAddr
 }
 
 func (t *TCPTransport) Consume() <-chan Message {
@@ -121,8 +129,15 @@ func (t *TCPTransport) handleConn(conn net.Conn, incoming bool) {
 		}
 
 		msg.From = conn.RemoteAddr().String()
-		peer.Wg.Add(1)
+
+		if msg.Stream {
+			peer.wg.Add(1)
+			log.Printf("[%s] incoming stream, waiting...\n", conn.RemoteAddr())
+			peer.wg.Wait()
+			log.Printf("[%s] stream closed, resuming read loop\n", conn.RemoteAddr())
+			continue
+		}
+
 		t.msgChan <- msg
-		peer.Wg.Wait()
 	}
 }

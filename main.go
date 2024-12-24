@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"time"
 
 	"github.com/AaravShirvoikar/scatterfs/internal/fileserver"
@@ -33,9 +34,27 @@ func main() {
 	time.Sleep(time.Second * 2)
 
 	key := "randomkey"
-	data := bytes.NewReader([]byte("random data"))
+	for i := range 10 {
+		data := bytes.NewReader([]byte("random data"))
+		fs2.Store(fmt.Sprintf("%s_%d", key, i), data)
+		time.Sleep(time.Millisecond * 100)
+	}
 
-	fs2.StoreData(key, data)
+	// data := bytes.NewReader([]byte("random data"))
+	// fs2.Store(key, data)
+	// time.Sleep(time.Millisecond * 100)
+
+	// r, err := fs2.Get(key)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	//
+	// b, err := io.ReadAll(r)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	//
+	// fmt.Println(string(b))
 
 	select {}
 }
