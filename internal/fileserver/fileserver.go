@@ -2,6 +2,7 @@ package fileserver
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/gob"
 	"fmt"
 	"io"
@@ -63,7 +64,9 @@ func (s *FileServer) broadcast(msg *Message) error {
 
 func (s *FileServer) Get(key string) (io.Reader, error) {
 	if s.storage.Exists(key) {
-		return s.storage.Read(key)
+		log.Printf("[%s] serving file %s locally", s.transport.Addr(), key)
+		_, r, err := s.storage.Read(key)
+		return r, err
 	}
 
 	log.Printf("[%s] does not have file %s locally, fetching from network", s.transport.Addr(), key)
@@ -78,19 +81,23 @@ func (s *FileServer) Get(key string) (io.Reader, error) {
 		return nil, err
 	}
 
+	time.Sleep(time.Millisecond * 500)
+
 	for _, peer := range s.peers {
-		fileBuff := new(bytes.Buffer)
-		n, err := io.Copy(fileBuff, peer)
+		var fileSize int64
+		binary.Read(peer, binary.LittleEndian, &fileSize)
+		n, err := s.storage.Write(key, io.LimitReader(peer, fileSize))
 		if err != nil {
 			return nil, err
 		}
-		fmt.Println("received bytes over the network:", n)
-		fmt.Println(fileBuff.String())
+
+		log.Printf("[%s] received %d bytes over the network from %s\n", s.transport.Addr(), n, peer.RemoteAddr())
+
+		peer.CloseStream()
 	}
 
-	select {}
-
-	return nil, nil
+	_, r, err := s.storage.Read(key)
+	return r, err
 }
 
 func (s *FileServer) Store(key string, r io.Reader) error {
@@ -170,7 +177,7 @@ func (s *FileServer) handleMessageGet(from string, msg MessageGet) error {
 
 	log.Printf("[%s] has file %s, serving over the network", s.transport.Addr(), msg.Key)
 
-	r, err := s.storage.Read(msg.Key)
+	fileSize, r, err := s.storage.Read(msg.Key)
 	if err != nil {
 		return err
 	}
@@ -180,6 +187,8 @@ func (s *FileServer) handleMessageGet(from string, msg MessageGet) error {
 		return fmt.Errorf("peer not found")
 	}
 
+	peer.Send([]byte{p2p.IncomingStream})
+	binary.Write(peer, binary.LittleEndian, fileSize)
 	n, err := io.Copy(peer, r)
 	if err != nil {
 		return err

@@ -28,7 +28,7 @@ func TestStorage(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, len(data), int(n))
 
-	r, err := s.Read(key)
+	_, r, err := s.Read(key)
 
 	assert.Nil(t, err)
 

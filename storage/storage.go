@@ -66,20 +66,20 @@ func NewStorage(root string, pathTransform PathTransformFunc) *Storage {
 	}
 }
 
-func (s *Storage) Read(key string) (io.Reader, error) {
-	f, err := s.readStream(key)
+func (s *Storage) Read(key string) (int64, io.Reader, error) {
+	n, f, err := s.readStream(key)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 	defer f.Close()
 
 	buff := new(bytes.Buffer)
 	_, err = io.Copy(buff, f)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 
-	return buff, nil
+	return n, buff, nil
 }
 
 func (s *Storage) Write(key string, r io.Reader) (int64, error) {
@@ -110,16 +110,21 @@ func (s *Storage) Reset() error {
 	return os.RemoveAll(s.root)
 }
 
-func (s *Storage) readStream(key string) (io.ReadCloser, error) {
+func (s *Storage) readStream(key string) (int64, io.ReadCloser, error) {
 	pathKey := s.pathTransformFunc(key)
 	filePath := fmt.Sprintf("%s/%s", s.root, pathKey.FullPath())
 
-	f, err := os.Open(filePath)
+	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 
-	return f, err
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return fileInfo.Size(), file, nil
 }
 
 func (s *Storage) writeStream(key string, r io.Reader) (int64, error) {
