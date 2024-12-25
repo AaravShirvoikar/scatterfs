@@ -182,6 +182,10 @@ func (s *FileServer) handleMessageGet(from string, msg MessageGet) error {
 		return err
 	}
 
+	if rc, ok := r.(io.ReadCloser); ok {
+		defer rc.Close()
+	}
+
 	peer, ok := s.peers[from]
 	if !ok {
 		return fmt.Errorf("peer not found")

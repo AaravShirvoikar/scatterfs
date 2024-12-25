@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"bytes"
 	"crypto/md5"
 	"crypto/sha1"
 	"encoding/hex"
@@ -67,19 +66,7 @@ func NewStorage(root string, pathTransform PathTransformFunc) *Storage {
 }
 
 func (s *Storage) Read(key string) (int64, io.Reader, error) {
-	n, f, err := s.readStream(key)
-	if err != nil {
-		return 0, nil, err
-	}
-	defer f.Close()
-
-	buff := new(bytes.Buffer)
-	_, err = io.Copy(buff, f)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	return n, buff, nil
+	return s.readStream(key)
 }
 
 func (s *Storage) Write(key string, r io.Reader) (int64, error) {
