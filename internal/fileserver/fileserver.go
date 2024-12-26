@@ -268,7 +268,7 @@ func (s *FileServer) handleMessageStore(from string, msg MessageStore) error {
 
 func (s *FileServer) bootstrapNetwork() error {
 	for _, addr := range s.bootstrapNodes {
-		log.Println("attempting to connect to:", addr)
+		log.Printf("[%s] attempting to connect to %s", s.transport.Addr(), addr)
 		go func(addr string) {
 			if err := s.transport.Dial(addr); err != nil {
 				fmt.Println("dial error:", err)
@@ -284,7 +284,7 @@ func (s *FileServer) OnPeer(peer p2p.Peer) error {
 	s.peers[peer.RemoteAddr().String()] = peer
 	s.peerLock.Unlock()
 
-	log.Println("connected to remote:", peer.RemoteAddr())
+	log.Printf("[%s] connected to remote %s", s.transport.Addr(), peer.RemoteAddr())
 
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"time"
 
 	"github.com/AaravShirvoikar/scatterfs/crypto"
@@ -27,6 +28,7 @@ func makeFileServer(listenAddr, root string, nodes ...string) *fileserver.FileSe
 func main() {
 	fs1 := makeFileServer(":9000", "9000_storage")
 	fs2 := makeFileServer(":9001", "9001_storage", ":9000")
+	fs3 := makeFileServer(":9002", "9002_storage", ":9000", ":9001")
 
 	go fs1.Start()
 	time.Sleep(time.Second * 2)
@@ -34,22 +36,25 @@ func main() {
 	go fs2.Start()
 	time.Sleep(time.Second * 2)
 
+	go fs3.Start()
+	time.Sleep(time.Second * 2)
+
 	key := "randomkey"
-	// for i := range 10 {
-	// 	data := bytes.NewReader([]byte("random data"))
-	// 	fs2.Store(fmt.Sprintf("%s_%d", key, i), data)
-	// 	time.Sleep(time.Millisecond * 100)
-	// }
+	for i := range 10 {
+		data := bytes.NewReader([]byte("random data"))
+		fs2.Store(fmt.Sprintf("%s_%d", key, i), data)
+		time.Sleep(time.Millisecond * 100)
+	}
 
-	data := bytes.NewReader([]byte("random data"))
-	fs2.Store(key, data)
-	time.Sleep(time.Millisecond * 100)
+	// data := bytes.NewReader([]byte("random data"))
+	// fs3.Store(key, data)
+	// time.Sleep(time.Millisecond * 100)
 
-	// if err := os.RemoveAll("9001_storage"); err != nil {
-	// 	log.Fatal(err)
-	// }
+	if err := os.RemoveAll("9002_storage"); err != nil {
+		log.Fatal(err)
+	}
 
-	r, err := fs2.Get(key)
+	r, err := fs3.Get(key + "_5")
 	if err != nil {
 		log.Fatal(err)
 	}
