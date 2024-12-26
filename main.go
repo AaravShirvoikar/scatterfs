@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
 	"time"
 
+	"github.com/AaravShirvoikar/scatterfs/crypto"
 	"github.com/AaravShirvoikar/scatterfs/internal/fileserver"
 	"github.com/AaravShirvoikar/scatterfs/p2p"
 	"github.com/AaravShirvoikar/scatterfs/storage"
@@ -15,7 +17,7 @@ func makeFileServer(listenAddr, root string, nodes ...string) *fileserver.FileSe
 	tr := p2p.NewTCPTransport(listenAddr, p2p.DefaultHandshakeFunc, p2p.DefaultDecodeFunc, nil)
 	s := storage.NewStorage(root, storage.DefaultPathTransformFunc)
 
-	fs := fileserver.NewFileServer(tr, s, nodes)
+	fs := fileserver.NewFileServer(tr, s, nodes, crypto.NewAESKey())
 
 	tr.OnPeer = fs.OnPeer
 
@@ -26,9 +28,7 @@ func main() {
 	fs1 := makeFileServer(":9000", "9000_storage")
 	fs2 := makeFileServer(":9001", "9001_storage", ":9000")
 
-	go func() {
-		fs1.Start()
-	}()
+	go fs1.Start()
 	time.Sleep(time.Second * 2)
 
 	go fs2.Start()
@@ -41,9 +41,13 @@ func main() {
 	// 	time.Sleep(time.Millisecond * 100)
 	// }
 
-	// data := bytes.NewReader([]byte("random data"))
-	// fs2.Store(key, data)
-	// time.Sleep(time.Millisecond * 100)
+	data := bytes.NewReader([]byte("random data"))
+	fs2.Store(key, data)
+	time.Sleep(time.Millisecond * 100)
+
+	// if err := os.RemoveAll("9001_storage"); err != nil {
+	// 	log.Fatal(err)
+	// }
 
 	r, err := fs2.Get(key)
 	if err != nil {

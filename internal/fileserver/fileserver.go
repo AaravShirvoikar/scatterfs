@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AaravShirvoikar/scatterfs/crypto"
 	"github.com/AaravShirvoikar/scatterfs/p2p"
 	"github.com/AaravShirvoikar/scatterfs/storage"
 )
@@ -18,16 +19,18 @@ type FileServer struct {
 	transport      p2p.Transport
 	storage        *storage.Storage
 	bootstrapNodes []string
+	encKey         []byte
 	peerLock       sync.Mutex
 	peers          map[string]p2p.Peer
 	quitChan       chan struct{}
 }
 
-func NewFileServer(transport p2p.Transport, storage *storage.Storage, nodes []string) *FileServer {
+func NewFileServer(transport p2p.Transport, storage *storage.Storage, nodes []string, encKey []byte) *FileServer {
 	return &FileServer{
 		transport:      transport,
 		storage:        storage,
 		bootstrapNodes: nodes,
+		encKey:         encKey,
 		peers:          make(map[string]p2p.Peer),
 		quitChan:       make(chan struct{}),
 	}
@@ -66,7 +69,13 @@ func (s *FileServer) Get(key string) (io.Reader, error) {
 	if s.storage.Exists(key) {
 		log.Printf("[%s] serving file %s locally", s.transport.Addr(), key)
 		_, r, err := s.storage.Read(key)
-		return r, err
+		if err != nil {
+			return nil, err
+		}
+
+		decBuff := new(bytes.Buffer)
+		_, err = crypto.CopyDecrypt(s.encKey, r, decBuff)
+		return decBuff, err
 	}
 
 	log.Printf("[%s] does not have file %s locally, fetching from network", s.transport.Addr(), key)
@@ -86,35 +95,53 @@ func (s *FileServer) Get(key string) (io.Reader, error) {
 	for _, peer := range s.peers {
 		var fileSize int64
 		binary.Read(peer, binary.LittleEndian, &fileSize)
-		n, err := s.storage.Write(key, io.LimitReader(peer, fileSize))
+
+		encBuff := new(bytes.Buffer)
+		if _, err := crypto.CopyEncrypt(s.encKey, io.LimitReader(peer, fileSize), encBuff); err != nil {
+			return nil, err
+		}
+
+		_, err := s.storage.Write(key, encBuff)
 		if err != nil {
 			return nil, err
 		}
 
-		log.Printf("[%s] received %d bytes over the network from %s\n", s.transport.Addr(), n, peer.RemoteAddr())
+		log.Printf("[%s] received %d bytes over the network from %s\n", s.transport.Addr(), fileSize, peer.RemoteAddr())
 
 		peer.CloseStream()
 	}
 
 	_, r, err := s.storage.Read(key)
-	return r, err
+	if err != nil {
+		return nil, err
+	}
+
+	decBuff := new(bytes.Buffer)
+	_, err = crypto.CopyDecrypt(s.encKey, r, decBuff)
+	return decBuff, err
 }
 
 func (s *FileServer) Store(key string, r io.Reader) error {
 	fileBuff := new(bytes.Buffer)
 	tee := io.TeeReader(r, fileBuff)
 
-	size, err := s.storage.Write(key, tee)
+	encBuff := new(bytes.Buffer)
+	if _, err := crypto.CopyEncrypt(s.encKey, tee, encBuff); err != nil {
+		return err
+	}
+
+	size, err := s.storage.Write(key, encBuff)
 	if err != nil {
 		return err
 	}
 
 	log.Printf("[%s] wrote %d bytes to storage\n", s.transport.Addr(), size)
 
+	fileSize := fileBuff.Len()
 	msg := Message{
 		Payload: MessageStore{
 			Key:  key,
-			Size: size,
+			Size: int64(fileSize),
 		},
 	}
 
@@ -177,10 +204,18 @@ func (s *FileServer) handleMessageGet(from string, msg MessageGet) error {
 
 	log.Printf("[%s] has file %s, serving over the network", s.transport.Addr(), msg.Key)
 
-	fileSize, r, err := s.storage.Read(msg.Key)
+	_, r, err := s.storage.Read(msg.Key)
 	if err != nil {
 		return err
 	}
+
+	decBuff := new(bytes.Buffer)
+	_, err = crypto.CopyDecrypt(s.encKey, r, decBuff)
+	if err != nil {
+		return err
+	}
+
+	fileSize := decBuff.Len()
 
 	if rc, ok := r.(io.ReadCloser); ok {
 		defer rc.Close()
@@ -192,8 +227,8 @@ func (s *FileServer) handleMessageGet(from string, msg MessageGet) error {
 	}
 
 	peer.Send([]byte{p2p.IncomingStream})
-	binary.Write(peer, binary.LittleEndian, fileSize)
-	n, err := io.Copy(peer, r)
+	binary.Write(peer, binary.LittleEndian, int64(fileSize))
+	n, err := io.Copy(peer, decBuff)
 	if err != nil {
 		return err
 	}
@@ -209,12 +244,18 @@ func (s *FileServer) handleMessageStore(from string, msg MessageStore) error {
 		return fmt.Errorf("peer not found")
 	}
 
-	n, err := s.storage.Write(msg.Key, io.LimitReader(peer, msg.Size))
+	encBuff := new(bytes.Buffer)
+	_, err := crypto.CopyEncrypt(s.encKey, io.LimitReader(peer, msg.Size), encBuff)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("[%s] received and wrote %d bytes to storage\n", s.transport.Addr(), n)
+	n, err := s.storage.Write(msg.Key, encBuff)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("[%s] received %d bytes and wrote %d bytes to storage\n", s.transport.Addr(), msg.Size, n)
 
 	peer.CloseStream()
 
