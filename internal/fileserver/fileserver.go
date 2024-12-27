@@ -115,7 +115,7 @@ func (s *FileServer) Get(key string) (io.Reader, error) {
 				return
 			}
 
-			log.Printf("[%s] received %d bytes over the network from %s\n", s.transport.Addr(), fileSize, peer.RemoteAddr())
+			log.Printf("[%s] received %d bytes over the network from %s", s.transport.Addr(), fileSize, peer.RemoteAddr())
 
 			peer.CloseStream()
 			done <- true
@@ -151,7 +151,7 @@ func (s *FileServer) Store(key string, r io.Reader) error {
 		return err
 	}
 
-	log.Printf("[%s] wrote %d bytes to storage\n", s.transport.Addr(), size)
+	log.Printf("[%s] wrote %d bytes to storage", s.transport.Addr(), size)
 
 	fileSize := fileBuff.Len()
 	msg := Message{
@@ -261,7 +261,7 @@ func (s *FileServer) handleMessageGet(from string, msg MessageGet) error {
 		return err
 	}
 
-	log.Printf("[%s] wrote %d bytes over the network to %s\n", s.transport.Addr(), n, from)
+	log.Printf("[%s] wrote %d bytes over the network to %s", s.transport.Addr(), n, from)
 
 	return nil
 }
@@ -283,7 +283,7 @@ func (s *FileServer) handleMessageStore(from string, msg MessageStore) error {
 		return err
 	}
 
-	log.Printf("[%s] received %d bytes and wrote %d bytes to storage\n", s.transport.Addr(), msg.Size, n)
+	log.Printf("[%s] received %d bytes and wrote %d bytes to storage", s.transport.Addr(), msg.Size, n)
 
 	peer.CloseStream()
 
