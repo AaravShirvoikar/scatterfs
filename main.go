@@ -86,12 +86,13 @@ func main() {
 			fmt.Printf("\nSelect an operation for FileServer %d:\n", ch)
 			fmt.Println("[1] Store file")
 			fmt.Println("[2] Get file")
-			fmt.Println("[3] Delete file locally")
+			fmt.Println("[3] Delete file globally")
+			fmt.Println("[4] Delete file locally")
 			fmt.Print("[0] Back to server selection\n> ")
 
 			var opCh int
 			_, err := fmt.Scanln(&opCh)
-			if err != nil || opCh < 0 || opCh > 3 {
+			if err != nil || opCh < 0 || opCh > 4 {
 				fmt.Println("Invalid choice.")
 				continue
 			}
@@ -143,6 +144,19 @@ func main() {
 				fmt.Println("File data:", string(fileData))
 
 			case 3:
+				var fileName string
+				fmt.Print("Enter file name: ")
+				fmt.Scanln(&fileName)
+
+				err := currFs.Remove(fileName)
+				time.Sleep(time.Second * 1)
+				if err != nil {
+					fmt.Println("Failed to delete file:", err)
+				} else {
+					fmt.Println("File deleted successfully.")
+				}
+
+			case 4:
 				var fileName string
 				fmt.Print("Enter file name: ")
 				fmt.Scanln(&fileName)

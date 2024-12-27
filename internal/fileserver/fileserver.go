@@ -40,12 +40,16 @@ type Message struct {
 	Payload any
 }
 
+type MessageGet struct {
+	Key string
+}
+
 type MessageStore struct {
 	Key  string
 	Size int64
 }
 
-type MessageGet struct {
+type MessageRemove struct {
 	Key string
 }
 
@@ -181,8 +185,34 @@ func (s *FileServer) Store(key string, r io.Reader) error {
 	return nil
 }
 
+func (s *FileServer) Remove(key string) error {
+	if s.storage.Exists(key) {
+		log.Printf("[%s] removed file %s", s.transport.Addr(), key)
+		if err := s.storage.Delete(key); err != nil {
+			return err
+		}
+	} else {
+		log.Printf("[%s] does not have file %s", s.transport.Addr(), key)
+	}
+
+	msg := Message{
+		Payload: MessageRemove{
+			Key: key,
+		},
+	}
+
+	return s.broadcast(&msg)
+}
+
 func (s *FileServer) RemoveLocal(key string) error {
-	return s.storage.Delete(key)
+	if s.storage.Exists(key) {
+		log.Printf("[%s] removed file %s", s.transport.Addr(), key)
+		return s.storage.Delete(key)
+	}
+
+	log.Printf("[%s] does not have file %s", s.transport.Addr(), key)
+
+	return nil
 }
 
 func (s *FileServer) loop() {
@@ -215,6 +245,8 @@ func (s *FileServer) handleMessage(from string, msg *Message) error {
 		return s.handleMessageGet(from, v)
 	case MessageStore:
 		return s.handleMessageStore(from, v)
+	case MessageRemove:
+		return s.handleMessageRemove(from, v)
 	}
 
 	return nil
@@ -293,6 +325,18 @@ func (s *FileServer) handleMessageStore(from string, msg MessageStore) error {
 	return nil
 }
 
+func (s *FileServer) handleMessageRemove(from string, msg MessageRemove) error {
+	log.Printf("[%s] received file delete request from %s", s.transport.Addr(), from)
+	if s.storage.Exists(msg.Key) {
+		log.Printf("[%s] removed file %s", s.transport.Addr(), msg.Key)
+		return s.storage.Delete(msg.Key)
+	}
+
+	log.Printf("[%s] does not have file %s", s.transport.Addr(), msg.Key)
+
+	return nil
+}
+
 func (s *FileServer) bootstrapNetwork() error {
 	for _, addr := range s.bootstrapNodes {
 		log.Printf("[%s] attempting to connect to %s", s.transport.Addr(), addr)
@@ -335,4 +379,5 @@ func (s *FileServer) Stop() {
 func init() {
 	gob.Register(MessageGet{})
 	gob.Register(MessageStore{})
+	gob.Register(MessageRemove{})
 }

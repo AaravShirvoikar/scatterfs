@@ -29,4 +29,4 @@ When the CLI starts, it will:
 2. Allow you to:
    - **Store**: Save a file to the network.
    - **Get**: Retrieve a file.
-   - **Delete**: Remove a file locally from a server.
+   - **Delete**: Remove a file from the network.
