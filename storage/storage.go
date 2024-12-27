@@ -66,11 +66,43 @@ func NewStorage(root string, pathTransform PathTransformFunc) *Storage {
 }
 
 func (s *Storage) Read(key string) (int64, io.Reader, error) {
-	return s.readStream(key)
+	pathKey := s.pathTransformFunc(key)
+	filePath := fmt.Sprintf("%s/%s", s.root, pathKey.FullPath())
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return fileInfo.Size(), file, nil
 }
 
 func (s *Storage) Write(key string, r io.Reader) (int64, error) {
-	return s.writeStream(key, r)
+	pathKey := s.pathTransformFunc(key)
+	path := fmt.Sprintf("%s/%s", s.root, pathKey.pathName)
+
+	if err := os.MkdirAll(path, os.ModePerm); err != nil {
+		return 0, err
+	}
+
+	filePath := fmt.Sprintf("%s/%s", s.root, pathKey.FullPath())
+
+	f, err := os.Create(filePath)
+	if err != nil {
+		return 0, nil
+	}
+
+	n, err := io.Copy(f, r)
+	if err != nil {
+		return 0, err
+	}
+
+	return n, nil
 }
 
 func (s *Storage) Exists(key string) bool {
@@ -95,44 +127,4 @@ func (s *Storage) Delete(key string) error {
 
 func (s *Storage) Reset() error {
 	return os.RemoveAll(s.root)
-}
-
-func (s *Storage) readStream(key string) (int64, io.ReadCloser, error) {
-	pathKey := s.pathTransformFunc(key)
-	filePath := fmt.Sprintf("%s/%s", s.root, pathKey.FullPath())
-
-	file, err := os.Open(filePath)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	fileInfo, err := file.Stat()
-	if err != nil {
-		return 0, nil, err
-	}
-
-	return fileInfo.Size(), file, nil
-}
-
-func (s *Storage) writeStream(key string, r io.Reader) (int64, error) {
-	pathKey := s.pathTransformFunc(key)
-	path := fmt.Sprintf("%s/%s", s.root, pathKey.pathName)
-
-	if err := os.MkdirAll(path, os.ModePerm); err != nil {
-		return 0, err
-	}
-
-	filePath := fmt.Sprintf("%s/%s", s.root, pathKey.FullPath())
-
-	f, err := os.Create(filePath)
-	if err != nil {
-		return 0, nil
-	}
-
-	n, err := io.Copy(f, r)
-	if err != nil {
-		return 0, err
-	}
-
-	return n, nil
 }
