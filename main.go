@@ -40,21 +40,24 @@ func main() {
 	time.Sleep(time.Second * 2)
 
 	key := "randomkey"
-	for i := range 10 {
-		data := bytes.NewReader([]byte("random data"))
-		fs2.Store(fmt.Sprintf("%s_%d", key, i), data)
-		time.Sleep(time.Millisecond * 100)
-	}
+	// for i := range 10 {
+	// 	data := bytes.NewReader([]byte("random data"))
+	// 	fs2.Store(fmt.Sprintf("%s_%d", key, i), data)
+	// 	time.Sleep(time.Millisecond * 100)
+	// }
 
-	// data := bytes.NewReader([]byte("random data"))
-	// fs3.Store(key, data)
-	// time.Sleep(time.Millisecond * 100)
+	data := bytes.NewReader([]byte("random data"))
+	fs3.Store(key, data)
+	time.Sleep(time.Millisecond * 100)
 
 	if err := os.RemoveAll("9002_storage"); err != nil {
 		log.Fatal(err)
 	}
+	if err := os.RemoveAll("9001_storage"); err != nil {
+		log.Fatal(err)
+	}
 
-	r, err := fs3.Get(key + "_5")
+	r, err := fs3.Get(key)
 	if err != nil {
 		log.Fatal(err)
 	}

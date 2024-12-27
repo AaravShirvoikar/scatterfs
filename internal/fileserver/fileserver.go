@@ -90,35 +90,51 @@ func (s *FileServer) Get(key string) (io.Reader, error) {
 		return nil, err
 	}
 
-	time.Sleep(time.Millisecond * 500)
+	timeout := time.After(time.Second * 5)
+	done := make(chan bool)
 
 	for _, peer := range s.peers {
-		var fileSize int64
-		binary.Read(peer, binary.LittleEndian, &fileSize)
+		go func(peer p2p.Peer) {
+			var fileSize int64
+			if err := binary.Read(peer, binary.LittleEndian, &fileSize); err != nil {
+				return
+			}
 
-		encBuff := new(bytes.Buffer)
-		if _, err := crypto.CopyEncrypt(s.encKey, io.LimitReader(peer, fileSize), encBuff); err != nil {
-			return nil, err
-		}
+			if fileSize == -1 {
+				log.Printf("[%s] did not receive file from %s", s.transport.Addr(), peer.RemoteAddr())
+				peer.CloseStream()
+				return
+			}
 
-		_, err := s.storage.Write(key, encBuff)
+			encBuff := new(bytes.Buffer)
+			if _, err := crypto.CopyEncrypt(s.encKey, io.LimitReader(peer, fileSize), encBuff); err != nil {
+				return
+			}
+
+			if _, err := s.storage.Write(key, encBuff); err != nil {
+				return
+			}
+
+			log.Printf("[%s] received %d bytes over the network from %s\n", s.transport.Addr(), fileSize, peer.RemoteAddr())
+
+			peer.CloseStream()
+			done <- true
+		}(peer)
+	}
+
+	select {
+	case <-done:
+		_, r, err := s.storage.Read(key)
 		if err != nil {
 			return nil, err
 		}
 
-		log.Printf("[%s] received %d bytes over the network from %s\n", s.transport.Addr(), fileSize, peer.RemoteAddr())
-
-		peer.CloseStream()
+		decBuff := new(bytes.Buffer)
+		_, err = crypto.CopyDecrypt(s.encKey, r, decBuff)
+		return decBuff, err
+	case <-timeout:
+		return nil, fmt.Errorf("[%s] timed out while fetching file %s from network", s.transport.Addr(), key)
 	}
-
-	_, r, err := s.storage.Read(key)
-	if err != nil {
-		return nil, err
-	}
-
-	decBuff := new(bytes.Buffer)
-	_, err = crypto.CopyDecrypt(s.encKey, r, decBuff)
-	return decBuff, err
 }
 
 func (s *FileServer) Store(key string, r io.Reader) error {
@@ -182,7 +198,7 @@ func (s *FileServer) loop() {
 			}
 
 			if err := s.handleMessage(msg.From, &m); err != nil {
-				fmt.Println("error handling message:", err)
+				log.Println(err)
 			}
 		case <-s.quitChan:
 			return
@@ -203,6 +219,14 @@ func (s *FileServer) handleMessage(from string, msg *Message) error {
 
 func (s *FileServer) handleMessageGet(from string, msg MessageGet) error {
 	if !s.storage.Exists(msg.Key) {
+		peer, ok := s.peers[from]
+		if !ok {
+			return fmt.Errorf("peer not found")
+		}
+
+		fileSize := -1
+		peer.Send([]byte{p2p.IncomingStream})
+		binary.Write(peer, binary.LittleEndian, int64(fileSize))
 		return fmt.Errorf("[%s] does not have file %s", s.transport.Addr(), msg.Key)
 	}
 
