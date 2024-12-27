@@ -6,3 +6,6 @@ run: build
 
 test:
 	@go test ./...
+
+clean:
+	@rm -rf file_storage encryption_keys

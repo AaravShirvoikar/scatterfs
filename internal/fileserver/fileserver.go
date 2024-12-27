@@ -90,7 +90,7 @@ func (s *FileServer) Get(key string) (io.Reader, error) {
 		return nil, err
 	}
 
-	timeout := time.After(time.Second * 5)
+	timeout := time.After(time.Second * 3)
 	done := make(chan bool)
 
 	for _, peer := range s.peers {
@@ -132,7 +132,7 @@ func (s *FileServer) Get(key string) (io.Reader, error) {
 		_, err = crypto.CopyDecrypt(s.encKey, r, decBuff)
 		return decBuff, err
 	case <-timeout:
-		return nil, fmt.Errorf("[%s] timed out while fetching file %s from network", s.transport.Addr(), key)
+		return nil, fmt.Errorf("server timed out while fetching file %s from network", key)
 	}
 }
 
