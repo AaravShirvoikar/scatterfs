@@ -101,7 +101,6 @@ func (s *FileServer) Get(key string) (io.Reader, error) {
 			}
 
 			if fileSize == -1 {
-				log.Printf("[%s] did not receive file from %s", s.transport.Addr(), peer.RemoteAddr())
 				peer.CloseStream()
 				return
 			}
@@ -180,6 +179,10 @@ func (s *FileServer) Store(key string, r io.Reader) error {
 	}
 
 	return nil
+}
+
+func (s *FileServer) RemoveLocal(key string) error {
+	return s.storage.Delete(key)
 }
 
 func (s *FileServer) loop() {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"time"
 
 	"github.com/AaravShirvoikar/scatterfs/crypto"
@@ -50,10 +49,10 @@ func main() {
 	fs3.Store(key, data)
 	time.Sleep(time.Millisecond * 100)
 
-	if err := os.RemoveAll("9002_storage"); err != nil {
+	if err := fs3.RemoveLocal(key); err != nil {
 		log.Fatal(err)
 	}
-	if err := os.RemoveAll("9001_storage"); err != nil {
+	if err := fs2.RemoveLocal(key); err != nil {
 		log.Fatal(err)
 	}
 
